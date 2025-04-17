@@ -6,6 +6,45 @@ output: html_document
 ---
 
 
+### NYC Taxi Data Analysis & Shiny Dashboard
+## Overview
+
+This project focuses on building an interactive Shiny web application using the NYC Yellow Taxi Trip Record Data for the year 2024. The aim is to analyze taxi trip patterns across New York City, uncover key insights about passenger behavior, fares, and traffic patterns, and present the results through a visually engaging and interactive dashboard.
+
+The data is sourced from the NYC Taxi and Limousine Commission (TLC), which publishes trip records on a monthly basis. We collected, cleaned, and transformed this data to prepare it for analysis and visualization.
+
+
+## Project Goals
+Understand and explore the structure of NYC taxi trips across different time scales (hourly, daily, monthly)
+
+Analyze patterns in trip distance, fare amount, tip behavior, and passenger counts
+
+Investigate trip duration and detect outliers or anomalies
+
+Build a clean, interactive Shiny dashboard that allows users to:
+
+Filter by date, time, boroughs, payment type, and more
+
+View summary statistics and dynamic plots
+
+Explore geospatial trends based on pickup and drop-off locations
+
+
+## Dataset
+Source: NYC TLC Trip Record Data
+
+Year: 2024
+
+Format: Monthly .parquet files (1 file per month)
+
+Final Format: Combined into a single .csv file with over 41 million rows and 19 variables
+
+
+
+
+
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
   warning = FALSE,
