@@ -94,6 +94,7 @@ library(dplyr)
 library(tidyverse)
 library(lubridate)
 library(dplyr)
+library(readr)
 ```
 
 ## Combining Monthly Parquet Files
@@ -293,11 +294,125 @@ Tip Amount: 0 to 200 USD
 
 Tolls Amount: 0 to 100 USD
 
-These filters remove unrealistic values and ensure our dataset reflects valid taxi trips for accurate analysis and visualization.
+
+## Passenger Count Filtering
+
+To ensure data consistency, we filtered the passenger_count variable to retain only values between 1 and 6. This range reflects the realistic seating capacity of standard NYC yellow taxis. Entries with 0 passengers or unusually high values are likely due to recording errors or system glitches and were removed to maintain data quality for group-based analysis.
+
+```{r }
+taxi_data <- taxi_data %>%
+  filter(passenger_count >= 1 & passenger_count <= 6)
+```
+
+```{r }
+taxi_data$payment_type <- recode(taxi_data$payment_type,
+  `1` = "Credit Card",
+  `2` = "Cash",
+  `3` = "No Charge",
+  `4` = "Dispute",
+  `5` = "Unknown",
+  `6` = "Voided Trip"
+)
+```
+
+## Payment Type Labeling
+The payment_type variable originally contained numeric codes that were not intuitive to interpret. To improve readability and usability in plots and filters, we replaced these numeric values with their corresponding descriptive labels:
+
+1 → "Credit Card"
+
+2 → "Cash"
+
+3 → "No Charge"
+
+4 → "Dispute"
+
+5 → "Unknown"
+
+6 → "Voided Trip"
+
+This step makes the variable easier to interpret and more meaningful in analysis and visualization.
+
 
 
 ```{r }
-
-
-
+taxi_data$RatecodeID <- recode(taxi_data$RatecodeID,
+  `1` = "Standard Rate",
+  `2` = "JFK",
+  `3` = "Newark",
+  `4` = "Nassau or Westchester",
+  `5` = "Negotiated Fare",
+  `6` = "Group Ride"
+)
 ```
+
+## Rate Code Labeling
+Similarly, the RatecodeID column consisted of numeric codes representing different fare types. We mapped these codes to descriptive labels based on NYC TLC documentation:
+
+1 → "Standard Rate"
+
+2 → "JFK"
+
+3 → "Newark"
+
+4 → "Nassau or Westchester"
+
+5 → "Negotiated Fare"
+
+6 → "Group Ride"
+
+This labeling enhances clarity, especially when analyzing fare types or allowing users to filter by rate category in the final Shiny app.
+
+
+##  Load the Taxi Zone Lookup (CSV)
+```{r Zone Lookup}
+
+# Read the lookup table
+zone_lookup <- read_csv("C:\\Users\\attafuro\\Desktop\\datanyc_taxi_2024\\taxi_zone_lookup.csv")
+
+# Preview
+head(zone_lookup)
+```
+
+```{r Joining the two Datasets}
+# Join for Pickup locations
+taxi_data <- taxi_data %>%
+  left_join(zone_lookup, by = c("PULocationID" = "LocationID")) %>%
+  rename(PU_Borough = Borough, PU_Zone = Zone, PU_ServiceZone = service_zone)
+
+# Join for Drop-off locations
+taxi_data <- taxi_data %>%
+  left_join(zone_lookup, by = c("DOLocationID" = "LocationID")) %>%
+  rename(DO_Borough = Borough, DO_Zone = Zone, DO_ServiceZone = service_zone)
+```
+
+
+We joined the zone lookup table twice — once using PULocationID and once using DOLocationID — to retrieve the corresponding zone names, boroughs, and service zones for both pickup and drop-off locations. These descriptive fields allow for better analysis and visualization, especially when comparing trip patterns across different parts of NYC.
+
+```{r }
+# Count missing values per column
+colSums(is.na(taxi_data)) %>% sort(decreasing = TRUE)
+
+# Total number of duplicate rows
+sum(duplicated(taxi_data))
+
+str(taxi_data)
+dim(taxi_data)  # Rows and columns
+
+# Are PU_Zone and DO_Zone present and filled
+table(is.na(taxi_data$PU_Zone)) 
+table(is.na(taxi_data$DO_Zone)) 
+
+glimpse(taxi_data)
+
+summary(taxi_data)
+```
+
+
+Before saving the fully cleaned and processed dataset, we conducted a final validation to ensure data quality. This step involved checking for any remaining missing values, duplicates, incorrect data types, and confirming that all zone and borough information was successfully merged. Ensuring a clean, complete dataset at this stage is essential for accurate analysis, visualization, and dashboard development.
+
+
+
+
+
+
+
