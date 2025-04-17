@@ -42,3 +42,88 @@ for (file in parquet_files[-1]) {
 cat("\n All files merged. Final CSV saved at:", output_file, "\n")
 ```
 
+## Dataset Structure
+
+We began by loading the full-year NYC Yellow Taxi dataset for 2024, which had been previously merged from 12 monthly Parquet files. The dataset contains over 41 million observations and 19 variables related to taxi operations, including timestamps, trip distances, fare details, pickup/dropoff locations, and passenger information.
+
+A structural inspection showed that most variables were correctly formatted, though the pickup and dropoff timestamps were stored as character data types and would need conversion to datetime objects for future time-based analysis.
+
+```{r}
+taxi_data <- read.csv("C:\\Users\\attafuro\\Desktop\\datanyc_taxi_2024\\yelllow_taxi_data.csv.csv")
+head(taxi_data)
+
+```
+
+```{r Basic Exploration}
+glimpse(taxi_data)
+
+str(taxi_data)
+
+summary(taxi_data)
+```
+
+## Summary Statistics
+
+By examining summary statistics for each variable, we gained insight into the typical ranges and spotted several extreme values. Some variables had implausibly high maximums, such as:
+
+trip_distance: exceeding 398,000 miles
+
+fare_amount and total_amount: over $335,000
+
+These values were flagged as outliers that will require filtering during the data cleaning process.
+
+```{r Missing Values Check}
+colSums(is.na(taxi_data)) %>% sort(decreasing = TRUE)
+```
+
+## Missing Values
+
+We then checked for missing values across all columns. Interestingly, only five variables had missing entries, and they all had exactly the same number: 4,091,232 missing values each. The affected columns were:
+
+passenger_count
+
+RatecodeID
+
+store_and_fwd_flag
+
+congestion_surcharge
+
+Airport_fee
+
+This strongly suggests that the same subset of rows were partially recorded or improperly loaded, rather than each column having unrelated missing values.
+
+To preserve the integrity of our dataset and avoid downstream analysis issues, we chose to remove all rows containing missing values in any of these five columns. These rows accounted for approximately 10% of the dataset, leaving behind a much cleaner and more reliable dataset to continue working with.
+
+
+```{r Removing Missing Values}
+taxi_data <- taxi_data %>%
+  filter(!is.na(passenger_count),
+         !is.na(RatecodeID),
+         !is.na(store_and_fwd_flag),
+         !is.na(congestion_surcharge),
+         !is.na(Airport_fee))
+```
+
+```{r Working of Time Conversion}
+library(lubridate)
+library(dplyr)
+
+# Convert pickup and dropoff datetime to POSIXct
+taxi_data <- taxi_data %>%
+  mutate(
+    tpep_pickup_datetime = ymd_hms(tpep_pickup_datetime),
+    tpep_dropoff_datetime = ymd_hms(tpep_dropoff_datetime)
+  )
+
+# Extract useful time features
+taxi_data <- taxi_data %>%
+  mutate(
+    pickup_date = as.Date(tpep_pickup_datetime),
+    pickup_hour = hour(tpep_pickup_datetime),
+    pickup_weekday = wday(tpep_pickup_datetime, label = TRUE),
+    pickup_month = month(tpep_pickup_datetime, label = TRUE),
+    trip_duration_min = as.numeric(difftime(tpep_dropoff_datetime, tpep_pickup_datetime, units = "mins"))
+  )
+
+
+```
