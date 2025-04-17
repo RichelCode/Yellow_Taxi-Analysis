@@ -5,16 +5,32 @@ date: "2025-04-17"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
 
-## Loading all relevant libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  echo = TRUE
+)
+```
+
+## Loading Neccessary Libraries Needed For the Analysis
+
+```{r Loading Libraries}
 library(arrow)
 library(dplyr)
 library(tidyverse)
 library(lubridate)
 library(dplyr)
 ```
+
+## Combining Monthly Parquet Files
+
+The original NYC Yellow Taxi dataset for 2024 was provided as 12 separate monthly files in Parquet format.
+To create a single, unified dataset for the entire year, we programmatically read each Parquet file one at a time using R’s arrow package. 
+As each file was read, it was immediately appended to a master CSV file to conserve memory, and then deleted from the working directory. 
+This approach allowed us to efficiently merge all records into one complete dataset (taxi_data_2024.csv) without overloading memory resources.
+
 
 ```{r}
 # Set your folder path where all 12 Parquet files are located
@@ -132,8 +148,36 @@ taxi_data <- taxi_data %>%
 
 
 ```{r }
-
-
-
-
+# Drop rows where datetime conversion failed
+taxi_data <- taxi_data %>%
+  filter(!is.na(tpep_pickup_datetime), !is.na(tpep_dropoff_datetime))
 ```
+
+After converting timestamp columns into datetime format, a small number of rows (55) failed to parse due to formatting issues. These rows were removed to ensure all subsequent time-based feature extraction and analysis were based on valid and consistent datetime values.
+
+```{r }
+taxi_data <- taxi_data %>%
+  mutate(
+    dropoff_date = as.Date(tpep_dropoff_datetime),
+    dropoff_hour = hour(tpep_dropoff_datetime),
+    dropoff_weekday = wday(tpep_dropoff_datetime, label = TRUE),
+    dropoff_month = month(tpep_dropoff_datetime, label = TRUE)
+  )
+```
+
+
+To enable a deeper understanding of when trips occur and how they vary over time, we extracted several time-based features from both the pickup and drop-off datetime columns.
+
+We converted the original timestamp strings (tpep_pickup_datetime and tpep_dropoff_datetime) into proper datetime objects, and then derived the following variables for each:
+
+Date: The calendar date on which the trip started or ended
+
+Hour: The hour of the day (0–23), useful for identifying rush hours, late-night trips, and peak demand
+
+Weekday: The day of the week (e.g., Monday, Saturday), helpful for analyzing weekend vs weekday patterns
+
+Month: The calendar month of the trip, which allows us to detect seasonal or monthly changes in taxi usage
+
+These engineered features will serve as key inputs for future visualizations and analysis, such as identifying high-demand hours, weekly trends, or drop-off behavior across the city.
+
+By including both pickup and drop-off time features, we gain a more complete view of the trip lifecycle and can study how start and end times affect distance, duration, fares, and passenger behavior.
