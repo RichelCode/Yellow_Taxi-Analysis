@@ -7,9 +7,13 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+## Loading all relevant libraries
 library(arrow)
 library(dplyr)
 library(tidyverse)
+library(lubridate)
+library(dplyr)
 ```
 
 ```{r}
@@ -104,10 +108,9 @@ taxi_data <- taxi_data %>%
          !is.na(Airport_fee))
 ```
 
-```{r Working of Time Conversion}
-library(lubridate)
-library(dplyr)
 
+
+```{r Working of Time Conversion}
 # Convert pickup and dropoff datetime to POSIXct
 taxi_data <- taxi_data %>%
   mutate(
@@ -124,6 +127,13 @@ taxi_data <- taxi_data %>%
     pickup_month = month(tpep_pickup_datetime, label = TRUE),
     trip_duration_min = as.numeric(difftime(tpep_dropoff_datetime, tpep_pickup_datetime, units = "mins"))
   )
+
+```
+
+
+```{r }
+
+
 
 
 ```
