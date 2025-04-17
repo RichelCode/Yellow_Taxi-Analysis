@@ -1,0 +1,388 @@
+---
+title: "Data Reading and Cleaning - STAT 504 Group Project"
+author: "Richel Attafuah"
+date: "2025-04-17"
+output: html_document
+---
+
+
+### NYC Taxi Data Analysis & Shiny Dashboard
+## Overview
+
+This project focuses on building an interactive Shiny web application using the NYC Yellow Taxi Trip Record Data for the year 2024. The aim is to analyze taxi trip patterns across New York City, uncover key insights about passenger behavior, fares, and traffic patterns, and present the results through a visually engaging and interactive dashboard.
+
+The data is sourced from the NYC Taxi and Limousine Commission (TLC), which publishes trip records on a monthly basis. We collected, cleaned, and transformed this data to prepare it for analysis and visualization.
+
+
+## Project Goals
+Understand and explore the structure of NYC taxi trips across different time scales (hourly, daily, monthly)
+
+Analyze patterns in trip distance, fare amount, tip behavior, and passenger counts
+
+Investigate trip duration and detect outliers or anomalies
+
+Build a clean, interactive Shiny dashboard that allows users to:
+
+Filter by date, time, boroughs, payment type, and more
+
+View summary statistics and dynamic plots
+
+Explore geospatial trends based on pickup and drop-off locations
+
+
+## Dataset
+Source: NYC TLC Trip Record Data
+
+Year: 2024
+
+Format: Monthly .parquet files (1 file per month)
+
+Final Format: Combined into a single .csv file with over 41 million rows and 19 variables
+
+## Key Variables
+
+tpep_pickup_datetime, tpep_dropoff_datetime
+passenger_count, trip_distance
+RatecodeID, store_and_fwd_flag
+PULocationID, DOLocationID
+payment_type, fare_amount, tip_amount, total_amount
+congestion_surcharge, Airport_fee, mta_tax, tolls_amount
+
+##Data Preparation Process
+
+## File Merging
+
+All 12 monthly .parquet files were read and merged into one CSV file.
+A memory-efficient script was used to process and delete each file after reading to avoid system overload.
+Initial Exploration
+
+## Structural and summary analysis using str(), summary(), and colSums(is.na())
+Identified missing values and extreme outliers in fare and distance columns
+
+## Missing Value Handling
+
+Five variables had identical missing values across ~4 million rows
+These rows were removed to ensure a clean, complete dataset
+Datetime Conversion
+
+Pickup and drop-off timestamps were converted to datetime format
+Invalid timestamp rows (55 in total) were removed
+
+## Feature Engineering
+
+Extracted time-based features from both pickup and drop-off timestamps:
+Hour of day, day of week, month, and trip duration in minutes
+
+## Outlier Filtering
+
+Applied logical caps on trip distance, fare amount, total amount, tip amount, and tolls
+Filtered out trips with 0 duration or durations over 3 hours
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  echo = TRUE
+)
+```
+
+## Loading Neccessary Libraries Needed For the Analysis
+
+```{r Loading Libraries}
+library(arrow)
+library(dplyr)
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(readr)
+```
+
+## Combining Monthly Parquet Files
+
+The original NYC Yellow Taxi dataset for 2024 was provided as 12 separate monthly files in Parquet format.
+To create a single, unified dataset for the entire year, we programmatically read each Parquet file one at a time using R’s arrow package. 
+As each file was read, it was immediately appended to a master CSV file to conserve memory, and then deleted from the working directory. 
+This approach allowed us to efficiently merge all records into one complete dataset (taxi_data_2024.csv) without overloading memory resources.
+
+
+## Dataset Structure
+
+We began by loading the full-year NYC Yellow Taxi dataset for 2024, which had been previously merged from 12 monthly Parquet files. The dataset contains over 41 million observations and 19 variables related to taxi operations, including timestamps, trip distances, fare details, pickup/dropoff locations, and passenger information.
+
+A structural inspection showed that most variables were correctly formatted, though the pickup and dropoff timestamps were stored as character data types and would need conversion to datetime objects for future time-based analysis.
+
+```{r Loading data}
+taxi_data <- read.csv("C://Users//attafuro//Desktop//datanyc_taxi_2024//yellow_taxi_data.csv")
+head(taxi_data)
+
+```
+
+```{r Basic Exploration}
+glimpse(taxi_data)
+
+str(taxi_data)
+
+summary(taxi_data)
+```
+
+## Summary Statistics
+
+By examining summary statistics for each variable, we gained insight into the typical ranges and spotted several extreme values. Some variables had implausibly high maximums, such as:
+
+trip_distance: exceeding 398,000 miles
+
+fare_amount and total_amount: over $335,000
+
+These values were flagged as outliers that will require filtering during the data cleaning process.
+
+```{r Missing Values Check}
+colSums(is.na(taxi_data)) %>% sort(decreasing = TRUE)
+```
+
+## Missing Values
+
+We then checked for missing values across all columns. Interestingly, only five variables had missing entries, and they all had exactly the same number: 4,091,232 missing values each. The affected columns were:
+
+passenger_count
+
+RatecodeID
+
+store_and_fwd_flag
+
+congestion_surcharge
+
+Airport_fee
+
+This strongly suggests that the same subset of rows were partially recorded or improperly loaded, rather than each column having unrelated missing values.
+
+To preserve the integrity of our dataset and avoid downstream analysis issues, we chose to remove all rows containing missing values in any of these five columns. These rows accounted for approximately 10% of the dataset, leaving behind a much cleaner and more reliable dataset to continue working with.
+
+
+```{r Removing Missing Values}
+taxi_data <- taxi_data %>%
+  filter(!is.na(passenger_count),
+         !is.na(RatecodeID),
+         !is.na(store_and_fwd_flag),
+         !is.na(congestion_surcharge),
+         !is.na(Airport_fee))
+```
+
+
+
+```{r Working of Time Conversion}
+# Convert pickup and dropoff datetime to POSIXct
+taxi_data <- taxi_data %>%
+  mutate(
+    tpep_pickup_datetime = ymd_hms(tpep_pickup_datetime),
+    tpep_dropoff_datetime = ymd_hms(tpep_dropoff_datetime)
+  )
+
+# Extract useful time features
+taxi_data <- taxi_data %>%
+  mutate(
+    pickup_date = as.Date(tpep_pickup_datetime),
+    pickup_hour = hour(tpep_pickup_datetime),
+    pickup_weekday = wday(tpep_pickup_datetime, label = TRUE),
+    pickup_month = month(tpep_pickup_datetime, label = TRUE),
+    trip_duration_min = as.numeric(difftime(tpep_dropoff_datetime, tpep_pickup_datetime, units = "mins"))
+  )
+
+```
+
+
+```{r }
+# Drop rows where datetime conversion failed
+taxi_data <- taxi_data %>%
+  filter(!is.na(tpep_pickup_datetime), !is.na(tpep_dropoff_datetime))
+```
+
+After converting timestamp columns into datetime format, a small number of rows (55) failed to parse due to formatting issues. These rows were removed to ensure all subsequent time-based feature extraction and analysis were based on valid and consistent datetime values.
+
+```{r }
+taxi_data <- taxi_data %>%
+  mutate(
+    dropoff_date = as.Date(tpep_dropoff_datetime),
+    dropoff_hour = hour(tpep_dropoff_datetime),
+    dropoff_weekday = wday(tpep_dropoff_datetime, label = TRUE),
+    dropoff_month = month(tpep_dropoff_datetime, label = TRUE)
+  )
+```
+
+
+To enable a deeper understanding of when trips occur and how they vary over time, we extracted several time-based features from both the pickup and drop-off datetime columns.
+
+We converted the original timestamp strings (tpep_pickup_datetime and tpep_dropoff_datetime) into proper datetime objects, and then derived the following variables for each:
+
+Date: The calendar date on which the trip started or ended
+
+Hour: The hour of the day (0–23), useful for identifying rush hours, late-night trips, and peak demand
+
+Weekday: The day of the week (e.g., Monday, Saturday), helpful for analyzing weekend vs weekday patterns
+
+Month: The calendar month of the trip, which allows us to detect seasonal or monthly changes in taxi usage
+
+These engineered features will serve as key inputs for future visualizations and analysis, such as identifying high-demand hours, weekly trends, or drop-off behavior across the city.
+
+By including both pickup and drop-off time features, we gain a more complete view of the trip lifecycle and can study how start and end times affect distance, duration, fares, and passenger behavior.
+
+
+```{r Outlier Removal 1 }
+taxi_data <- taxi_data %>%
+  filter(trip_duration_min > 0, trip_duration_min < 180)
+```
+
+We then applied a logical filter to the trip_duration_min column to retain only rows where the trip lasted:
+
+More than 0 minutes (to remove invalid or failed trips)
+
+Less than 180 minutes (3 hours), since longer durations are likely to be anomalies, data errors, or outliers that would distort time-based visualizations
+
+This step ensures that future analysis is based on reliable and valid trip records.
+
+```{r Outlier Removal 2 }
+taxi_data <- taxi_data %>%
+  filter(
+    trip_distance > 0, trip_distance <= 100,            # Distance cap
+    fare_amount > 0, fare_amount <= 500,                # Fare bounds
+    total_amount > 0, total_amount <= 600,              # Total fare with surcharges
+    tip_amount >= 0, tip_amount <= 200,                 # Tip sanity cap
+    tolls_amount >= 0, tolls_amount <= 100              # Reasonable toll range
+  )
+
+```
+
+## Outlier Filtering for Numeric Values
+After cleaning trip durations, we applied additional filters to remove extreme or implausible values from key numeric columns. These thresholds are based on domain knowledge and help improve the reliability of our analysis.
+
+Trip Distance: 0 to 100 miles
+
+Fare Amount: 0 to 500 USD
+
+Total Amount: 0 to 600 USD
+
+Tip Amount: 0 to 200 USD
+
+Tolls Amount: 0 to 100 USD
+
+
+## Passenger Count Filtering
+
+To ensure data consistency, we filtered the passenger_count variable to retain only values between 1 and 6. This range reflects the realistic seating capacity of standard NYC yellow taxis. Entries with 0 passengers or unusually high values are likely due to recording errors or system glitches and were removed to maintain data quality for group-based analysis.
+
+```{r Filtering 1}
+taxi_data <- taxi_data %>%
+  filter(passenger_count >= 1 & passenger_count <= 6)
+```
+
+```{r Interpretability 1 }
+taxi_data$payment_type <- recode(taxi_data$payment_type,
+  `1` = "Credit Card",
+  `2` = "Cash",
+  `3` = "No Charge",
+  `4` = "Dispute",
+  `5` = "Unknown",
+  `6` = "Voided Trip"
+)
+```
+
+## Payment Type Labeling
+The payment_type variable originally contained numeric codes that were not intuitive to interpret. To improve readability and usability in plots and filters, we replaced these numeric values with their corresponding descriptive labels:
+
+1 → "Credit Card"
+
+2 → "Cash"
+
+3 → "No Charge"
+
+4 → "Dispute"
+
+5 → "Unknown"
+
+6 → "Voided Trip"
+
+This step makes the variable easier to interpret and more meaningful in analysis and visualization.
+
+
+
+```{r Interpretability 2}
+taxi_data$RatecodeID <- recode(taxi_data$RatecodeID,
+  `1` = "Standard Rate",
+  `2` = "JFK",
+  `3` = "Newark",
+  `4` = "Nassau or Westchester",
+  `5` = "Negotiated Fare",
+  `6` = "Group Ride"
+)
+```
+
+## Rate Code Labeling
+Similarly, the RatecodeID column consisted of numeric codes representing different fare types. We mapped these codes to descriptive labels based on NYC TLC documentation:
+
+1 → "Standard Rate"
+
+2 → "JFK"
+
+3 → "Newark"
+
+4 → "Nassau or Westchester"
+
+5 → "Negotiated Fare"
+
+6 → "Group Ride"
+
+This labeling enhances clarity, especially when analyzing fare types or allowing users to filter by rate category in the final Shiny app.
+
+
+##  Load the Taxi Zone Lookup (CSV)
+```{r Zone Lookup}
+
+# Read the lookup table
+zone_lookup <- read_csv("C:\\Users\\attafuro\\Desktop\\datanyc_taxi_2024\\taxi_zone_lookup.csv")
+
+# Preview
+head(zone_lookup)
+```
+
+```{r Joining the two Datasets}
+# Join for Pickup locations
+taxi_data <- taxi_data %>%
+  left_join(zone_lookup, by = c("PULocationID" = "LocationID")) %>%
+  rename(PU_Borough = Borough, PU_Zone = Zone, PU_ServiceZone = service_zone)
+
+# Join for Drop-off locations
+taxi_data <- taxi_data %>%
+  left_join(zone_lookup, by = c("DOLocationID" = "LocationID")) %>%
+  rename(DO_Borough = Borough, DO_Zone = Zone, DO_ServiceZone = service_zone)
+```
+
+
+We joined the zone lookup table twice — once using PULocationID and once using DOLocationID — to retrieve the corresponding zone names, boroughs, and service zones for both pickup and drop-off locations. These descriptive fields allow for better analysis and visualization, especially when comparing trip patterns across different parts of NYC.
+
+```{r Verification}
+# Count missing values per column
+colSums(is.na(taxi_data)) %>% sort(decreasing = TRUE)
+
+# Total number of duplicate rows
+sum(duplicated(taxi_data))
+
+str(taxi_data)
+dim(taxi_data)  # Rows and columns
+
+# Are PU_Zone and DO_Zone present and filled
+table(is.na(taxi_data$PU_Zone)) 
+table(is.na(taxi_data$DO_Zone)) 
+
+glimpse(taxi_data)
+
+summary(taxi_data)
+```
+
+
+Before saving the fully cleaned and processed dataset, we conducted a final validation to ensure data quality. This step involved checking for any remaining missing values, duplicates, incorrect data types, and confirming that all zone and borough information was successfully merged. Ensuring a clean, complete dataset at this stage is essential for accurate analysis, visualization, and dashboard development.
+
+
+
+
+
+
+
