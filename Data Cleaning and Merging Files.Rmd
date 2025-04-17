@@ -78,13 +78,6 @@ Hour of day, day of week, month, and trip duration in minutes
 Applied logical caps on trip distance, fare amount, total amount, tip amount, and tolls
 Filtered out trips with 0 duration or durations over 3 hours
 
-
-
-
-
-
-
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
   warning = FALSE,
@@ -260,3 +253,51 @@ Month: The calendar month of the trip, which allows us to detect seasonal or mon
 These engineered features will serve as key inputs for future visualizations and analysis, such as identifying high-demand hours, weekly trends, or drop-off behavior across the city.
 
 By including both pickup and drop-off time features, we gain a more complete view of the trip lifecycle and can study how start and end times affect distance, duration, fares, and passenger behavior.
+
+
+```{r Outlier Removal 1 }
+taxi_data <- taxi_data %>%
+  filter(trip_duration_min > 0, trip_duration_min < 180)
+```
+
+We then applied a logical filter to the trip_duration_min column to retain only rows where the trip lasted:
+
+More than 0 minutes (to remove invalid or failed trips)
+
+Less than 180 minutes (3 hours), since longer durations are likely to be anomalies, data errors, or outliers that would distort time-based visualizations
+
+This step ensures that future analysis is based on reliable and valid trip records.
+
+```{r Outlier Removal 2 }
+taxi_data <- taxi_data %>%
+  filter(
+    trip_distance > 0, trip_distance <= 100,            # Distance cap
+    fare_amount > 0, fare_amount <= 500,                # Fare bounds
+    total_amount > 0, total_amount <= 600,              # Total fare with surcharges
+    tip_amount >= 0, tip_amount <= 200,                 # Tip sanity cap
+    tolls_amount >= 0, tolls_amount <= 100              # Reasonable toll range
+  )
+
+```
+
+## Outlier Filtering for Numeric Values
+After cleaning trip durations, we applied additional filters to remove extreme or implausible values from key numeric columns. These thresholds are based on domain knowledge and help improve the reliability of our analysis.
+
+Trip Distance: 0 to 100 miles
+
+Fare Amount: 0 to 500 USD
+
+Total Amount: 0 to 600 USD
+
+Tip Amount: 0 to 200 USD
+
+Tolls Amount: 0 to 100 USD
+
+These filters remove unrealistic values and ensure our dataset reflects valid taxi trips for accurate analysis and visualization.
+
+
+```{r }
+
+
+
+```
