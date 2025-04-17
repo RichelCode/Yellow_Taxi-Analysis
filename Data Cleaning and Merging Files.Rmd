@@ -39,6 +39,46 @@ Format: Monthly .parquet files (1 file per month)
 
 Final Format: Combined into a single .csv file with over 41 million rows and 19 variables
 
+## Key Variables
+
+tpep_pickup_datetime, tpep_dropoff_datetime
+passenger_count, trip_distance
+RatecodeID, store_and_fwd_flag
+PULocationID, DOLocationID
+payment_type, fare_amount, tip_amount, total_amount
+congestion_surcharge, Airport_fee, mta_tax, tolls_amount
+
+##Data Preparation Process
+
+## File Merging
+
+All 12 monthly .parquet files were read and merged into one CSV file.
+A memory-efficient script was used to process and delete each file after reading to avoid system overload.
+Initial Exploration
+
+## Structural and summary analysis using str(), summary(), and colSums(is.na())
+Identified missing values and extreme outliers in fare and distance columns
+
+## Missing Value Handling
+
+Five variables had identical missing values across ~4 million rows
+These rows were removed to ensure a clean, complete dataset
+Datetime Conversion
+
+Pickup and drop-off timestamps were converted to datetime format
+Invalid timestamp rows (55 in total) were removed
+
+## Feature Engineering
+
+Extracted time-based features from both pickup and drop-off timestamps:
+Hour of day, day of week, month, and trip duration in minutes
+
+## Outlier Filtering
+
+Applied logical caps on trip distance, fare amount, total amount, tip amount, and tolls
+Filtered out trips with 0 duration or durations over 3 hours
+
+
 
 
 
