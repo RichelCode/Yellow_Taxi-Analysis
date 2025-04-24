@@ -112,17 +112,37 @@ We began by loading the full-year NYC Yellow Taxi dataset for 2024, which had be
 A structural inspection showed that most variables were correctly formatted, though the pickup and dropoff timestamps were stored as character data types and would need conversion to datetime objects for future time-based analysis.
 
 ```{r Loading data}
-taxi_data <- read.csv("C://Users//attafuro//Desktop//datanyc_taxi_2024//yellow_taxi_data.csv")
-head(taxi_data)
+# Load data 
+taxi_data <- fread("C://Users//attafuro//Desktop//datanyc_taxi_2024//yellow_taxi_data.csv")
+
+# Take a sample of 100,000 rows
+set.seed(2025)  # for reproducibility
+taxi_sample <- taxi_data[sample(.N, 100000)]
 
 ```
 
+
+## Why We Are Using a Random Sample
+Due to the large size of the original NYC Yellow Taxi dataset — which contains over 41 million rows — working directly with the full dataset can significantly slow down the development process, especially when performing initial data cleaning, transformation, and building an interactive Shiny dashboard.
+
+To ensure efficient use of computational resources and a faster workflow during exploratory analysis and app development, we chose to work with a random sample of 100,000 rows. This sample is representative of the overall dataset and allows us to:
+
+Prototype and test data cleaning steps quickly
+
+Develop and debug visualization features without long loading times
+
+Maintain a balance between performance and insight during the dashboard design phase
+
+Once the dashboard is complete and tested, it can be easily scaled to accommodate the full dataset if needed by switching from the sample to the complete dataset in the data loading chunk.
+
+
+
 ```{r Basic Exploration}
-glimpse(taxi_data)
+glimpse(taxi_sample)
 
-str(taxi_data)
+str(taxi_sample)
 
-summary(taxi_data)
+summary(taxi_sample)
 ```
 
 ## Summary Statistics
@@ -136,12 +156,12 @@ fare_amount and total_amount: over $335,000
 These values were flagged as outliers that will require filtering during the data cleaning process.
 
 ```{r Missing Values Check}
-colSums(is.na(taxi_data)) %>% sort(decreasing = TRUE)
+colSums(is.na(taxi_sample)) %>% sort(decreasing = TRUE)
 ```
 
 ## Missing Values
 
-We then checked for missing values across all columns. Interestingly, only five variables had missing entries, and they all had exactly the same number: 4,091,232 missing values each. The affected columns were:
+We then checked for missing values across all columns. Interestingly, only five variables had missing entries, and they all had exactly the same number:  9785 missing values each. The affected columns were:
 
 passenger_count
 
@@ -159,7 +179,7 @@ To preserve the integrity of our dataset and avoid downstream analysis issues, w
 
 
 ```{r Removing Missing Values}
-taxi_data <- taxi_data %>%
+taxi_sample <- taxi_sample %>%
   filter(!is.na(passenger_count),
          !is.na(RatecodeID),
          !is.na(store_and_fwd_flag),
@@ -170,41 +190,40 @@ taxi_data <- taxi_data %>%
 
 
 ```{r Working of Time Conversion}
-# Convert pickup and dropoff datetime to POSIXct
-taxi_data <- taxi_data %>%
+# Convert datetime first
+taxi_sample <- taxi_sample %>%
   mutate(
     tpep_pickup_datetime = ymd_hms(tpep_pickup_datetime),
     tpep_dropoff_datetime = ymd_hms(tpep_dropoff_datetime)
   )
 
-# Extract useful time features
-taxi_data <- taxi_data %>%
+# Now extract time features without using label = TRUE
+taxi_sample <- taxi_sample %>%
   mutate(
     pickup_date = as.Date(tpep_pickup_datetime),
     pickup_hour = hour(tpep_pickup_datetime),
-    pickup_weekday = wday(tpep_pickup_datetime, label = TRUE),
-    pickup_month = month(tpep_pickup_datetime, label = TRUE),
+    pickup_weekday = weekdays(tpep_pickup_datetime),
+    pickup_month = months(tpep_pickup_datetime),
     trip_duration_min = as.numeric(difftime(tpep_dropoff_datetime, tpep_pickup_datetime, units = "mins"))
   )
-
 ```
 
 
 ```{r }
 # Drop rows where datetime conversion failed
-taxi_data <- taxi_data %>%
+taxi_sample <- taxi_sample %>%
   filter(!is.na(tpep_pickup_datetime), !is.na(tpep_dropoff_datetime))
 ```
 
 After converting timestamp columns into datetime format, a small number of rows (55) failed to parse due to formatting issues. These rows were removed to ensure all subsequent time-based feature extraction and analysis were based on valid and consistent datetime values.
 
 ```{r }
-taxi_data <- taxi_data %>%
+taxi_sample <- taxi_sample %>%
   mutate(
     dropoff_date = as.Date(tpep_dropoff_datetime),
     dropoff_hour = hour(tpep_dropoff_datetime),
-    dropoff_weekday = wday(tpep_dropoff_datetime, label = TRUE),
-    dropoff_month = month(tpep_dropoff_datetime, label = TRUE)
+    dropoff_weekday =weekdays(tpep_dropoff_datetime),
+    dropoff_month = months(tpep_dropoff_datetime)
   )
 ```
 
@@ -227,7 +246,7 @@ By including both pickup and drop-off time features, we gain a more complete vie
 
 
 ```{r Outlier Removal 1 }
-taxi_data <- taxi_data %>%
+taxi_sample <- taxi_sample %>%
   filter(trip_duration_min > 0, trip_duration_min < 180)
 ```
 
@@ -240,7 +259,7 @@ Less than 180 minutes (3 hours), since longer durations are likely to be anomali
 This step ensures that future analysis is based on reliable and valid trip records.
 
 ```{r Outlier Removal 2 }
-taxi_data <- taxi_data %>%
+taxi_sample <- taxi_sample %>%
   filter(
     trip_distance > 0, trip_distance <= 100,            # Distance cap
     fare_amount > 0, fare_amount <= 500,                # Fare bounds
@@ -270,12 +289,12 @@ Tolls Amount: 0 to 100 USD
 To ensure data consistency, we filtered the passenger_count variable to retain only values between 1 and 6. This range reflects the realistic seating capacity of standard NYC yellow taxis. Entries with 0 passengers or unusually high values are likely due to recording errors or system glitches and were removed to maintain data quality for group-based analysis.
 
 ```{r Filtering 1}
-taxi_data <- taxi_data %>%
+taxi_sample <- taxi_sample %>%
   filter(passenger_count >= 1 & passenger_count <= 6)
 ```
 
 ```{r Interpretability 1 }
-taxi_data$payment_type <- recode(taxi_data$payment_type,
+taxi_sample$payment_type <- recode(taxi_sample$payment_type,
   `1` = "Credit Card",
   `2` = "Cash",
   `3` = "No Charge",
@@ -305,7 +324,7 @@ This step makes the variable easier to interpret and more meaningful in analysis
 
 
 ```{r Interpretability 2}
-taxi_data$RatecodeID <- recode(taxi_data$RatecodeID,
+taxi_sample$RatecodeID <- recode(taxi_sample$RatecodeID,
   `1` = "Standard Rate",
   `2` = "JFK",
   `3` = "Newark",
@@ -345,12 +364,12 @@ head(zone_lookup)
 
 ```{r Joining the two Datasets}
 # Join for Pickup locations
-taxi_data <- taxi_data %>%
+taxi_sample <- taxi_sample %>%
   left_join(zone_lookup, by = c("PULocationID" = "LocationID")) %>%
   rename(PU_Borough = Borough, PU_Zone = Zone, PU_ServiceZone = service_zone)
 
 # Join for Drop-off locations
-taxi_data <- taxi_data %>%
+taxi_sample <- taxi_sample %>%
   left_join(zone_lookup, by = c("DOLocationID" = "LocationID")) %>%
   rename(DO_Borough = Borough, DO_Zone = Zone, DO_ServiceZone = service_zone)
 ```
@@ -360,26 +379,30 @@ We joined the zone lookup table twice — once using PULocationID and once using
 
 ```{r Verification}
 # Count missing values per column
-colSums(is.na(taxi_data)) %>% sort(decreasing = TRUE)
+colSums(is.na(taxi_sample)) %>% sort(decreasing = TRUE)
 
 # Total number of duplicate rows
-sum(duplicated(taxi_data))
+sum(duplicated(taxi_sample))
 
-str(taxi_data)
-dim(taxi_data)  # Rows and columns
+str(taxi_sample)
+dim(taxi_sample)  # Rows and columns
 
 # Are PU_Zone and DO_Zone present and filled
-table(is.na(taxi_data$PU_Zone)) 
-table(is.na(taxi_data$DO_Zone)) 
+table(is.na(taxi_sample$PU_Zone)) 
+table(is.na(taxi_sample$DO_Zone)) 
 
-glimpse(taxi_data)
+glimpse(taxi_sample)
 
-summary(taxi_data)
+summary(taxi_sample)
 ```
 
 
 Before saving the fully cleaned and processed dataset, we conducted a final validation to ensure data quality. This step involved checking for any remaining missing values, duplicates, incorrect data types, and confirming that all zone and borough information was successfully merged. Ensuring a clean, complete dataset at this stage is essential for accurate analysis, visualization, and dashboard development.
 
+
+```{r Final Saved Cleaned Sample Data to work With}
+write.csv(taxi_sample, "C://Users//attafuro//Desktop//cleaned_taxi_sample.csv", row.names = FALSE)
+```
 
 
 
