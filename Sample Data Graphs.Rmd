@@ -1,0 +1,92 @@
+---
+title: "Plots for Project Group ( Clean Sample Data)"
+author: "Richel Attafuah"
+date: "2025-04-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  echo = TRUE
+)
+```
+
+## Loading Neccessary Libraries Needed For the Analysis
+
+```{r Loading Libraries}
+library(arrow)
+library(dplyr)
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(plotly)
+```
+
+```{r Final Saved Cleaned Sample Data to work With}
+sample_data <- read_csv("C:\\Users\\attafuro\\Desktop\\datanyc_taxi_2024\\cleaned_taxi_sample.csv")
+
+# Count missing values per column
+colSums(is.na(sample_data)) %>% sort(decreasing = TRUE)
+
+```
+
+```{r Data Cleaning}
+sample_data <- sample_data %>%
+  filter(!is.na(RatecodeID))
+# Count missing values per column
+colSums(is.na(sample_data)) %>% sort(decreasing = TRUE)
+```
+
+## Exploratory Data Analysis
+
+```{r EDA ONE}
+# Group and count number of trips per day
+daily_density <- taxi_sample %>%
+  group_by(pickup_date) %>%
+  summarise(trip_count = n())
+
+```
+
+```{r EDA 1}
+ggplot(daily_density, aes(x = pickup_date, y = trip_count)) +
+  geom_line(color = "steelblue", linewidth = 1) +
+  labs(
+    title = "Daily NYC Taxi Trip Density",
+    x = "Date",
+    y = "Number of Trips"
+  ) +
+  theme_minimal()
+```
+
+```{r EDA 2}
+# Filter first
+filtered_data <- taxi_sample %>%
+  filter(
+    PU_Borough == "Manhattan",  
+    trip_distance <= 10         
+  )
+
+
+filtered_density <- filtered_data %>%
+  group_by(pickup_date) %>%
+  summarise(trip_count = n())
+```
+
+
+```{r Interactive EDA with plotly}
+ggplot_obj <- ggplot(filtered_density, aes(x = pickup_date, y = trip_count)) +
+  geom_line(color = "steelblue", linewidth = 1) +
+  labs(
+    title = "Interactive Trip Density Chart",
+    x = "Date",
+    y = "Trip Count"
+  ) +
+  theme_minimal()
+
+ggplotly(ggplot_obj)
+
+```
