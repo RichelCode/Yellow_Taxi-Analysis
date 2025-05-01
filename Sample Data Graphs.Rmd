@@ -1,5 +1,5 @@
 ---
-title: "Plots for Project Group ( Clean Sample Data)"
+title: "Plots for Project Group (Clean Sample Data)"
 author: "Richel Attafuah"
 date: "2025-04-24"
 output: html_document
@@ -13,80 +13,76 @@ knitr::opts_chunk$set(
 )
 ```
 
-## Loading Neccessary Libraries Needed For the Analysis
+Exploring how hourly yellow taxi trip volumes vary across selected month, weekday/weekend, and trip distance
+I focused on short to medium trips (0–5 miles) to analyze typical city travel patterns while avoiding outliers from long-distance rides.
 
-```{r Loading Libraries}
-library(arrow)
-library(dplyr)
+
+```{r Final EDA Richel}
+
+# Load libraries
 library(tidyverse)
 library(lubridate)
-library(dplyr)
-library(readr)
-library(ggplot2)
-library(plotly)
-```
+library(glue) #helps with dynamic labelling
 
-```{r Final Saved Cleaned Sample Data to work With}
+# Load your dataset
 sample_data <- read_csv("C:\\Users\\attafuro\\Desktop\\datanyc_taxi_2024\\cleaned_taxi_sample.csv")
 
-# Count missing values per column
-colSums(is.na(sample_data)) %>% sort(decreasing = TRUE)
-
-```
-
-```{r Data Cleaning}
+# Preprocessing: Add hour, weekday/weekend, month, and trip distance
 sample_data <- sample_data %>%
-  filter(!is.na(RatecodeID))
-# Count missing values per column
-colSums(is.na(sample_data)) %>% sort(decreasing = TRUE)
-```
+  mutate(
+    hour = hour(tpep_pickup_datetime),
+    weekday = wday(tpep_pickup_datetime, label = TRUE),
+    day_type = if_else(weekday %in% c("Sat", "Sun"), "Weekend", "Weekday"),  # <-- Replace with input$daytype
+    month = month(tpep_pickup_datetime, label = TRUE, abbr = FALSE)          # <-- Replace with input$month
+  )
 
-## Exploratory Data Analysis
+# Static input values – will become dynamic in Shiny
+# input$daytype <- "Weekday"
+# input$month <- "January"
+# input$trip_distance_range <- c(0, 5)
 
-```{r EDA ONE}
-# Group and count number of trips per day
-daily_density <- taxi_sample %>%
-  group_by(pickup_date) %>%
-  summarise(trip_count = n())
+daytype <- "Weekday"                     # <-- input$daytype in Shiny
+selected_month <- "January"             # <-- input$month in Shiny
+trip_distance_range <- c(0, 5)          # <-- input$trip_distance_range (slider) in Shiny
 
-```
-
-```{r EDA 1}
-ggplot(daily_density, aes(x = pickup_date, y = trip_count)) +
-  geom_line(color = "steelblue", linewidth = 1) +
-  labs(
-    title = "Daily NYC Taxi Trip Density",
-    x = "Date",
-    y = "Number of Trips"
-  ) +
-  theme_minimal()
-```
-
-```{r EDA 2}
-# Filter first
-filtered_data <- taxi_sample %>%
+# Filter the dataset
+filtered_data <- sample_data %>%
   filter(
-    PU_Borough == "Manhattan",  
-    trip_distance <= 10         
+    day_type == daytype,                              # <-- input$daytype
+    month == selected_month,                          # <-- input$month
+    trip_distance >= trip_distance_range[1],          # <-- input$trip_distance_range[1]
+    trip_distance <= trip_distance_range[2]           # <-- input$trip_distance_range[2]
+  )
+
+# Aggregate: count trips by hour
+hourly_trips <- filtered_data %>%
+  group_by(hour) %>%
+  summarise(trip_count = n(), .groups = "drop")
+
+# Static Plot: Yellow Taxi theme
+ggplot(hourly_trips, aes(x = hour, y = trip_count)) +
+  geom_line(color = "#FFD700", size = 1.5) +  # NYC yellow
+  geom_point(color = "black", size = 2) +     # Black for contrast
+  scale_x_continuous(breaks = 0:23) +
+  labs(
+     title = glue("NYC Yellow Taxi Hourly Demand – {selected_month} ({daytype}), Trips {trip_distance_range[1]}–{trip_distance_range[2]} miles"),
+     subtitle = "Trip volume by hour of the day, filtered by month, day type, and distance",
+     x = "Hour of Day",
+     y = "Number of Trips"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", color = "#333333"),
+    plot.subtitle = element_text(color = "#666666")
   )
 
 
-filtered_density <- filtered_data %>%
-  group_by(pickup_date) %>%
-  summarise(trip_count = n())
 ```
 
 
-```{r Interactive EDA with plotly}
-ggplot_obj <- ggplot(filtered_density, aes(x = pickup_date, y = trip_count)) +
-  geom_line(color = "steelblue", linewidth = 1) +
-  labs(
-    title = "Interactive Trip Density Chart",
-    x = "Date",
-    y = "Trip Count"
-  ) +
-  theme_minimal()
 
-ggplotly(ggplot_obj)
 
-```
+
+
+
+
