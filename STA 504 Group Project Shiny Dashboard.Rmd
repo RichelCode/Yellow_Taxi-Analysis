@@ -1,0 +1,368 @@
+---
+title: "STA 504 Group Project Shiny Dashboard"
+author: "Samantha, Charntel, and Richel"
+date: "5/2/2025"
+output: html_notebook
+---
+
+
+```{r set-up, include=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  echo = TRUE
+)
+```
+
+## Libraries
+
+```{r libraries}
+library(tidyverse)
+library(sf)
+library(ggthemes)
+library(lubridate)
+library(glue)
+library(shiny)
+```
+
+## Data
+
+
+```{r}
+sample_data <- read_csv("C:\\Users\\attafuro\\Desktop\\datanycfinal-2024\\cleaned_taxi_sample.csv", show_col_types = FALSE) |>
+  mutate(
+    time_of_day = case_when(
+      pickup_hour >= 5 & pickup_hour < 12 ~ "Morning",
+      pickup_hour >= 12 & pickup_hour < 17 ~ "Afternoon",
+      pickup_hour >= 17 & pickup_hour < 21 ~ "Evening",
+      TRUE ~ "Night"
+    ),
+    trip_duration_bin = case_when(
+      trip_duration_min <= 5 ~ "0-5 min",
+      trip_duration_min > 5 & trip_duration_min <= 10 ~ "5-10 min",
+      trip_duration_min > 10 &
+        trip_duration_min <= 20 ~ "10-20 min",
+      trip_duration_min > 20 &
+        trip_duration_min <= 30 ~ "20-30 min",
+      trip_duration_min > 30 ~ "30+ min"
+    ),
+    time_of_day = factor(
+      time_of_day,
+      levels = c("Morning", "Afternoon", "Evening", "Night")
+    ),
+    trip_duration_bin = factor(
+      trip_duration_bin,
+      levels = c("0-5 min", "5-10 min", "10-20 min", "20-30 min", "30+ min")
+    )
+  )
+taxi_map <- read_sf("C://Users//attafuro//Desktop//datanycfinal-2024//taxi_zones.shp")
+
+addResourcePath("taxiimage.jpg", "taxiimage.jpg")
+```
+
+## Dashboard
+
+
+```{r}
+# === Dropdown Options ===
+months <- c(
+  "January" = 1,
+  "February" = 2,
+  "March" = 3,
+  "April" = 4,
+  "May" = 5,
+  "June" = 6,
+  "July" = 7,
+  "August" = 8,
+  "September" = 9,
+  "October" = 10,
+  "November" = 11,
+  "December" = 12
+)
+
+times <- c("Morning", "Afternoon", "Evening", "Night")
+lengths <- c("0-5 min", "5-10 min", "10-20 min", "20-30 min", "30+ min")
+days <- c(
+  "Monday" = "Mon",
+  "Tuesday" = "Tue",
+  "Wednesday" = "Wed",
+  "Thursday" = "Thu",
+  "Friday" = "Fri",
+  "Saturday" = "Sat",
+  "Sunday" = "Sun"
+)
+
+ui <- fluidPage(
+  tags$head(tags$style(
+    HTML(
+      "
+      body {
+        background-color: #fffdf3;
+        font-family: 'Segoe UI', sans-serif;
+        color: #333;
+      }
+      .welcome-container {
+        text-align: center;
+        padding: 60px 25px;
+        background-color: #fffbe6;
+        min-height: 600px;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(255, 213, 79, 0.2);
+      }
+      .welcome-image {
+        width: 90%;
+        max-width: 700px;
+        height: auto;
+        border-radius: 14px;
+        box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.25);
+        filter: brightness(1.05) contrast(1.05) saturate(1.15);
+        transition: transform 0.3s ease;
+      }
+      .welcome-image:hover {
+        transform: scale(1.01);
+      }
+      .welcome-title {
+        margin-top: 40px;
+        font-weight: 800;
+        color: #1a1a1a;
+        font-size: 32px;
+        letter-spacing: 0.5px;
+      }
+      .welcome-description {
+        font-size: 18px;
+        color: #555555;
+        margin-top: 20px;
+        max-width: 850px;
+        margin-left: auto;
+        margin-right: auto;
+        line-height: 1.7;
+      }
+    "
+    )
+  )),
+  
+  titlePanel("NYC Yellow Cab Data Explorer"),
+  
+  tabsetPanel(
+    id = "tabs",
+    
+    # === Welcome Tab ===
+    
+tabPanel("Welcome",
+         tags$img(src = "taxiimage.jpg", style = "width:100%; margin-top:20px; border-radius: 10px;"),
+         br(),
+         h2("Welcome to the NYC Yellow Cab Data Dashboard"),
+         p("Dive into interactive visualizations to explore NYC taxi patterns across time, location, and fare. Use the tabs and sidebar filters to uncover key insights across time periods, boroughs, and ride distances."),
+         tags$details(tags$summary("Project Overview"),
+                      p("This dashboard explores spatial and temporal trip patterns in NYC using cleaned yellow taxi data, aiming to provide insights into traffic demand and ride behavior.")),
+         tags$details(tags$summary("Goals"),
+                      p("Understand when and where NYC yellow cab rides occur, analyze fare structures, and identify patterns in ride duration and distance.")),
+         tags$details(tags$summary("Data Description"),
+                      p("NYC Yellow Taxi Trip Data, including timestamps, pickup/dropoff locations, distance, fare amount, and duration, with cleaned and sampled data for dashboard rendering.")),
+         tags$details(tags$summary("Tools Used"),
+                      p("R, Shiny, dplyr, ggplot2, sf, lubridate, shinythemes.")),
+         tags$details(tags$summary("References"),
+                      p("NYC Taxi & Limousine Commission (TLC) Trip Record Data, R CRAN packages, and data visualization best practices.")),
+         tags$details(tags$summary("Acknowledgements"),
+                      p("Group project by Samantha, Charntel, and Richel. Guided by Professor Mahsa Ashouri."))
+)
+,
+    
+    # === Map Tab ===
+    tabPanel("Map", fluidRow(
+      column(
+        3,
+        selectInput("month", "Select Month:", choices = months),
+        selectInput("time", "Select Time of Day:", choices = times),
+        sliderInput(
+          "max_fare",
+          "Maximum Fare to Display (USD):",
+          min = 0,
+          max = 200,
+          value = 100
+        )
+      ),
+      column(9, plotOutput("map"))
+    )),
+    
+    # === Histogram Tab ===
+    tabPanel("Histogram", fluidRow(
+      column(
+        3,
+        selectInput("time", "Select Time of Day:", choices = times),
+        selectInput("duration", "Select Trip Duration:", choices = lengths)
+      ),
+      column(9, plotOutput("hist"))
+    )),
+    
+    # === Line Chart Tab ===
+    tabPanel("Line Chart", fluidRow(
+      column(
+        3,
+        selectInput("month", "Select Month:", choices = months),
+        selectInput("day_of_week", "Select Days of the Week:", choices = days),
+        sliderInput(
+          "max_distance",
+          "Select Maximum Trip Distance:",
+          min = 0,
+          max = 70,
+          value = 35
+        )
+      ),
+      column(9, plotOutput("line"))
+    ))
+  )
+)
+
+
+
+# === SERVER ===
+server <- function(input, output, session) {
+  output$dynamic_inputs <- renderUI({
+    tab <- input$tabs
+    if (tab == "Map") {
+      tagList(
+        selectInput("month", "Select Month:", choices = months),
+        selectInput("time", "Select Time of Day:", choices = times),
+        sliderInput(
+          "max_fare",
+          "Maximum Fare to Display (USD):",
+          min = 0,
+          max = 200,
+          value = 100
+        )
+      )
+    } else if (tab == "Histogram") {
+      tagList(
+        selectInput("time", "Select Time of Day:", choices = times),
+        selectInput("duration", "Select Trip Duration:", choices = lengths)
+      )
+    } else if (tab == "Line Chart") {
+      tagList(
+        selectInput("month", "Select Month:", choices = months),
+        selectInput("day_of_week", "Select Days of the Week:", choices = days),
+        sliderInput(
+          "max_distance",
+          "Select Maximum Trip Distance:",
+          min = 0,
+          max = 70,
+          value = 35
+        )
+      )
+    }
+  })
+  
+  output$map <- renderPlot({
+    taxi_grouped <- sample_data |>
+      mutate(LocationID = PULocationID,
+             month = month(tpep_pickup_datetime)) |>
+      filter(fare_amount <= input$max_fare) |>
+      group_by(month, time_of_day, LocationID) |>
+      summarize(trips = n(), .groups = "drop") |>
+      filter(
+        month == input$month,
+        time_of_day == input$time
+      )
+    
+    map_all <- left_join(taxi_map, taxi_grouped)
+    
+    ggplot(map_all) +
+      geom_sf(aes(fill = trips),
+              color = "black",
+              linewidth = 0.1) +
+      coord_sf() +
+      theme_map() +
+      labs(fill = "Trip Count",
+           title = "Trip Pick Up Density in NYC by Taxi Zone",
+           caption = "Data Source: NYC Taxi and Limousine Commission") +
+      theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+        legend.position = c(1, 0.05),
+        legend.direction = "vertical",
+        legend.title = element_blank()
+      ) +
+      scale_fill_viridis_c(
+        option = "plasma",
+        na.value = rgb(246, 246, 246, max = 255),
+        guide = guide_colorbar(
+          ticks = T,
+          label = T,
+          barheight = 5,
+          barwidth = 0.5
+        )
+      )
+  })
+  
+  output$hist <- renderPlot({
+    filtered_data <- sample_data %>%
+      filter(
+        time_of_day == input$time,
+        trip_duration_bin == input$duration
+      )
+    
+    ggplot(filtered_data, aes(x = fare_amount)) +
+      geom_histogram(
+        binwidth = 5,
+        fill = "#FFD700",
+        color = "black",
+        alpha = 0.8
+      ) +
+      labs(
+        title = glue("Fare Distribution: {input$time} Trips ({input$duration})"),
+        x = "Fare Amount (USD)",
+        y = "Number of Trips"
+      ) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(
+          size = 14,
+          face = "bold",
+          hjust = 0.5
+        ),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()
+      )
+  })
+  
+  output$line <- renderPlot({
+    sample_data_3 <- sample_data %>%
+      mutate(
+        hour = hour(tpep_pickup_datetime),
+        weekday = wday(tpep_pickup_datetime, label = TRUE),
+        month = month(tpep_pickup_datetime)
+      )
+    
+    filtered_data <- sample_data_3 %>%
+      filter(
+        weekday == input$day_of_week,
+        month == input$month,
+        trip_distance <= input$max_distance
+      )
+    
+    hourly_trips <- filtered_data %>%
+      group_by(hour) %>%
+      summarise(trip_count = n(), .groups = "drop")
+    
+    ggplot(hourly_trips, aes(x = hour, y = trip_count)) +
+      geom_line(color = "#FFD700", size = 1.5) +
+      geom_point(color = "black", size = 2) +
+      scale_x_continuous(breaks = 0:23) +
+      labs(
+        title = "NYC Yellow Taxi Hourly Demand",
+        subtitle = "Trip volume by hour of the day, filtered by month, day type, and distance",
+        x = "Hour of Day",
+        y = "Number of Trips"
+      ) +
+      theme_minimal(base_size = 14) +
+      theme(
+        plot.title = element_text(face = "bold", color = "#333333"),
+        plot.subtitle = element_text(color = "#666666"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()
+      )
+  })
+}
+# === Launch App ===
+shinyApp(ui = ui, server = server)
+```
+
+
